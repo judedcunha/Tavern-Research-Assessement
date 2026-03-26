@@ -22,7 +22,7 @@ columns = [row[1] for row in cursor.execute("PRAGMA table_info(pages)").fetchall
 if "categories" not in columns:
     cursor.execute("DROP TABLE IF EXISTS pages")
 
-cursor.execute("CREATE TABLE IF NOT EXISTS pages (name TEXT, links TEXT, categories TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS pages (name TEXT UNIQUE, links TEXT, categories TEXT)")
 cursor.execute("CREATE INDEX IF NOT EXISTS idx_pages_name ON pages (name)")
 conn.commit()
 
@@ -32,8 +32,20 @@ def encode_text(text):
     doc = nlp(text)
     return doc.vector.reshape(1, -1)
 
+_page_cache = {}
+
 def get_page(page_name):
     """Get a specific Wikipedia page by name"""
+    if page_name in _page_cache:
+        return _page_cache[page_name]
+
+    page = _fetch_page(page_name)
+    _page_cache[page_name] = page
+    _page_cache[page.title] = page
+    return page
+
+def _fetch_page(page_name):
+    """Fetch a Wikipedia page from the API (uncached)."""
     # Attempt 1: Direct page lookup
     try:
         return wikipedia.page(page_name, auto_suggest=False, redirect=True)
@@ -60,20 +72,24 @@ def get_page(page_name):
 
     raise wikipedia.exceptions.PageError(page_name)
 
-def get_page_links_with_cache(page_name, hard_mode=False):
-    cached_page = cursor.execute("SELECT * FROM pages WHERE name = ?", (page_name,)).fetchone()
 
-    if not cached_page:
+def clear_page_cache():
+    """Clear the in-memory page cache."""
+    _page_cache.clear()
+
+def get_page_links_with_cache(page_name, hard_mode=False):
+    cached_page = cursor.execute("SELECT links, categories FROM pages WHERE name = ?", (page_name,)).fetchone()
+
+    if cached_page:
+        links = json.loads(cached_page[0])
+        categories = json.loads(cached_page[1])
+    else:
         page = get_page(page_name)
         links = page.links or []
         categories = page.categories or []
-        cursor.execute("INSERT INTO pages (name, links, categories) VALUES (?, ?, ?)",
+        cursor.execute("INSERT OR IGNORE INTO pages (name, links, categories) VALUES (?, ?, ?)",
                        (page_name, json.dumps(links), json.dumps(categories)))
         conn.commit()
-        cached_page = cursor.execute("SELECT * FROM pages WHERE name = ?", (page_name,)).fetchone()
-
-    links = json.loads(cached_page[1])
-    categories = json.loads(cached_page[2])
 
     filtered_links = [link for link in links if is_regular_link(link)]
     if not hard_mode:
@@ -225,7 +241,7 @@ def is_regular_page(page_name):
         return False
     return not is_meta_category(page_name)
 
-def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_mode=False):
+def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_mode=False, end_embedding=None):
     """Find a short path between two Wikipedia pages. Greedy forward hill-climbing
     using cosine similarity of spacy embeddings to score link relevance."""
 
@@ -260,8 +276,9 @@ def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_m
     print(f"{start_path[-1]} ??? {end_path[0]}")
 
     # Greedy forward expansion with limited backtracking
-    end_leaf_page = get_page(end_leaf)
-    end_embedding = encode_text(end_leaf_page.summary)
+    if end_embedding is None:
+        end_leaf_page = get_page(end_leaf)
+        end_embedding = encode_text(end_leaf_page.summary)
     scored_links = [
         (link, cosine_similarity(encode_text(link), end_embedding)[0][0])
         for link in links if link not in visited
@@ -273,7 +290,8 @@ def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_m
     for next_page, _ in scored_links[:3]:
         result = _find_short_path(
             start_path + [next_page], end_path,
-            visited | {next_page}, start_time, hard_mode=hard_mode
+            visited | {next_page}, start_time, hard_mode=hard_mode,
+            end_embedding=end_embedding
         )
         if result is not None:
             return result
@@ -283,7 +301,8 @@ def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_m
 def find_short_path(start_page, end_page, hard_mode=False):
     start_path = [start_page.title]
     end_path = [end_page.title]
-    result = _find_short_path(start_path, end_path, hard_mode=hard_mode)
+    end_embedding = encode_text(end_page.summary)
+    result = _find_short_path(start_path, end_path, hard_mode=hard_mode, end_embedding=end_embedding)
     if result is None:
         raise Exception(f"Could not find path from {start_page.title} to {end_page.title}")
     return result
