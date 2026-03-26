@@ -136,11 +136,37 @@ def test_link_through_categories(mock_wikipedia_library):
     # Finds the path through the "Blue Things" category
     assert path == ["Blueberry", "Blue Things", "Ocean"]
 
+def test_hard_mode_no_categories(mock_wikipedia_library):
+    start_page = wiki.get_page("Blueberry")
+    end_page = wiki.get_page("Ocean")
+    # In hard mode, can't use "Blue Things" category shortcut — path must go through links only
+    path = wiki.find_short_path(start_page, end_page, hard_mode=True)
+    assert "Blue Things" not in path
+    assert len(path) > 3  # longer than the normal mode path through categories
+
 def test_do_not_link_through_meta_pages(mock_wikipedia_library):
     start_page = wiki.get_page("Apple")
     end_page = wiki.get_page("Orphan (graph theory)")
     with pytest.raises(Exception):
         wiki.find_short_path(start_page, end_page)
+
+def test_meta_category_filtering():
+    # Meta categories should be filtered
+    assert wiki.is_meta_category("Short description is different from Wikidata")
+    assert wiki.is_meta_category("Articles with unsourced statements from March 2024")
+    assert wiki.is_meta_category("All stub articles")
+    assert wiki.is_meta_category("CS1 maint: archived copy as title")
+    assert wiki.is_meta_category("Pages using infobox country")
+    assert wiki.is_meta_category("WikiProject Mathematics articles")
+    assert wiki.is_meta_category("1950 births")
+    assert wiki.is_meta_category("Living people")
+
+    # Thematic categories should NOT be filtered
+    assert not wiki.is_meta_category("Fruit")
+    assert not wiki.is_meta_category("Blue Things")
+    assert not wiki.is_meta_category("Technology")
+    assert not wiki.is_meta_category("American rock music groups")
+    assert not wiki.is_meta_category("Cities in California")
 
 def test_greedy_search(mock_wikipedia_library):
     start_page = wiki.get_page("Blueberry")

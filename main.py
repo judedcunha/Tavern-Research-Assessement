@@ -8,6 +8,16 @@ def main():
     cmd = input()
     if cmd == "q":
         return
+
+    print("\nNormal mode uses both links and categories to find paths.")
+    print("Hard mode uses only links (no categories) — paths are longer and harder to find!")
+    print("Normal or hard mode? [n/h]")
+    mode_choice = input().strip().lower()
+    hard_mode = mode_choice == "h"
+    if hard_mode:
+        print("Hard mode selected! Categories will be ignored.\n")
+    else:
+        print("Normal mode selected.\n")
     
     with open("dictionary.txt", "r") as f:
         common_words = f.read().splitlines()
@@ -49,8 +59,8 @@ def main():
         print("Calculating Bacon paths...\n")
 
         try:
-            computer_path = find_short_path(start_page, computer_page)
-            user_path = find_short_path(start_page, user_page)
+            computer_path = find_short_path(start_page, computer_page, hard_mode=hard_mode)
+            user_path = find_short_path(start_page, user_page, hard_mode=hard_mode)
         except Exception as e:
             print(f"Could not compute paths: {e}")
             print("Let's try another round.\n")

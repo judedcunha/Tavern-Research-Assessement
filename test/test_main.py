@@ -31,38 +31,32 @@ def mock_input():
 
 def test_main_single_round(mock_wiki_functions, mock_input):
     """Test main function for a single round"""
-    # Set up input to play one round then exit
-    mock_input.side_effect = ['', 'Ocean', 'q']
-    
+    # Set up input: enter, mode selection, page name, quit
+    mock_input.side_effect = ['', 'n', 'Ocean', 'q']
+
     main()
-    
-    # Verify input was called twice
-    assert mock_input.call_count == 3
+
+    assert mock_input.call_count == 4
 
 def test_main_multiple_rounds(mock_wiki_functions, mock_input):
     """Test main function with custom input sequence"""
-    # Simulate user entering different pages
-    mock_input.side_effect = ['', 'Mountain', '', 'River', '', 'Plain', 'q']
-    
+    # Simulate: enter, mode, page+again, page+again, page+quit
+    mock_input.side_effect = ['', 'n', 'Mountain', '', 'River', '', 'Plain', 'q']
+
     main()
-    
-    # Should have 6 input calls: 
-    # enter
-    # page name, play again (yes), 
-    # page name, play again (yes), 
-    # page name, play again (no)
-    assert mock_input.call_count == 7
+
+    assert mock_input.call_count == 8
 
 def test_stop_q(mock_wiki_functions, mock_input):
     """Test that main function handles different input types"""
     # Test with different input types
     test_inputs = ['q']
-    
+
     for test_input in test_inputs:
         mock_input.reset_mock()
-        mock_input.side_effect = ['','Forest', test_input, 'Utopia', 'n']
-        
+        mock_input.side_effect = ['', 'n', 'Forest', test_input, 'Utopia', 'n']
+
         # Should not raise any exceptions
         main()
-        
-        assert mock_input.call_count == 3
+
+        assert mock_input.call_count == 4
