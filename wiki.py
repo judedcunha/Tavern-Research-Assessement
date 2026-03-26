@@ -67,12 +67,24 @@ def get_page_links_with_cache(page_name):
         filtered.remove(page_name)
     return filtered
 
+META_PREFIXES = [
+    "Wikipedia:", "Category:", "Template:", "Help:",
+    "Portal:", "Draft:", "Module:", "File:", "Talk:",
+]
+META_SUBSTRINGS = [
+    "disambiguation", "articles with", "pages with",
+    "cs1 maint", "short description", "webarchive template",
+    "use mdy dates", "use dmy dates", "all stub",
+]
+
 def is_regular_page(page_name):
-    if "disambiguation" in page_name: return False
-    if "automatic" in page_name: return False
-    if "article" in page_name: return False
-    if "page" in page_name: return False
-    if "identifier" in page_name: return False
+    lower = page_name.lower()
+    for prefix in META_PREFIXES:
+        if lower.startswith(prefix.lower()):
+            return False
+    for substring in META_SUBSTRINGS:
+        if substring in lower:
+            return False
     return True
 
 def _find_short_path(start_path, end_path, visited=None, start_time=None):

@@ -1,8 +1,5 @@
 from wiki import get_page, find_short_path
 import random
-import warnings
-import nltk
-import spacy
 
 def main():
     print("\n\n🥓 Welcome to WikiBacon! 🥓\n")
@@ -51,12 +48,18 @@ def main():
 
         print("Calculating Bacon paths...\n")
 
-        computer_path = find_short_path(start_page, computer_page)
+        try:
+            computer_path = find_short_path(start_page, computer_page)
+            user_path = find_short_path(start_page, user_page)
+        except Exception as e:
+            print(f"Could not compute paths: {e}")
+            print("Let's try another round.\n")
+            continue
+
         print("Computer's path:")
         print(f"\n -> ".join(computer_path))
         print(f"Length: {len(computer_path)}\n")
 
-        user_path = find_short_path(start_page, user_page)
         print("Your path:")
         print(f"\n -> ".join(user_path))
         print(f"Length: {len(user_path)}\n")

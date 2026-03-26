@@ -139,11 +139,8 @@ def test_link_through_categories(mock_wikipedia_library):
 def test_do_not_link_through_meta_pages(mock_wikipedia_library):
     start_page = wiki.get_page("Apple")
     end_page = wiki.get_page("Orphan (graph theory)")
-    try:
-        path = wiki.find_short_path(start_page, end_page)
-        assert "find_short_path should throw an error" == None
-    except Exception as e:
-        pass
+    with pytest.raises(Exception):
+        wiki.find_short_path(start_page, end_page)
 
 def test_greedy_search(mock_wikipedia_library):
     start_page = wiki.get_page("Blueberry")
