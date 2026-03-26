@@ -5,6 +5,9 @@ import time
 from functools import lru_cache
 import spacy
 from sklearn.metrics.pairwise import cosine_similarity
+import warnings
+from bs4 import GuessedAtParserWarning
+warnings.filterwarnings("ignore", category=GuessedAtParserWarning)
 
 # Load spacy model once at module level
 nlp = spacy.load("en_core_web_sm")
