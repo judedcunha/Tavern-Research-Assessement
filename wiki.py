@@ -46,14 +46,33 @@ def get_page(page_name: str) -> WikipediaPage:
     _page_cache[page.title] = page
     return page
 
+def _wiki_page_with_retry(page_name: str, **kwargs) -> WikipediaPage:
+    """Call wikipedia.page with a single retry on transient API errors."""
+    for attempt in range(2):
+        try:
+            return wikipedia.page(page_name, **kwargs)
+        except (ConnectionError, TimeoutError):
+            if attempt == 0:
+                time.sleep(0.5)
+                continue
+            raise
+        except Exception as e:
+            # Retry on empty API responses (JSONDecodeError from requests)
+            if "Expecting value" in str(e) and attempt == 0:
+                time.sleep(0.5)
+                continue
+            raise
+    raise wikipedia.exceptions.PageError(page_name)
+
+
 def _fetch_page(page_name: str) -> WikipediaPage:
     """Fetch a Wikipedia page from the API (uncached)."""
     # Attempt 1: Direct page lookup
     try:
-        return wikipedia.page(page_name, auto_suggest=False, redirect=True)
+        return _wiki_page_with_retry(page_name, auto_suggest=False, redirect=True)
     except wikipedia.exceptions.DisambiguationError as e:
         try:
-            return wikipedia.page(e.options[0], auto_suggest=False, redirect=True)
+            return _wiki_page_with_retry(e.options[0], auto_suggest=False, redirect=True)
         except Exception:
             pass
     except wikipedia.exceptions.PageError:
@@ -63,10 +82,10 @@ def _fetch_page(page_name: str) -> WikipediaPage:
     try:
         search_results = wikipedia.search(page_name)
         if search_results:
-            return wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
+            return _wiki_page_with_retry(search_results[0], auto_suggest=False, redirect=True)
     except wikipedia.exceptions.DisambiguationError as e:
         try:
-            return wikipedia.page(e.options[0], auto_suggest=False, redirect=True)
+            return _wiki_page_with_retry(e.options[0], auto_suggest=False, redirect=True)
         except Exception:
             pass
     except Exception:
@@ -83,12 +102,25 @@ def get_page_links_with_cache(page_name: str, hard_mode: bool = False) -> list[s
     cached_page = cursor.execute("SELECT links, categories FROM pages WHERE name = ?", (page_name,)).fetchone()
 
     if cached_page:
-        links = json.loads(cached_page[0])
-        categories = json.loads(cached_page[1])
-    else:
-        page = get_page(page_name)
-        links = page.links or []
-        categories = page.categories or []
+        try:
+            links = json.loads(cached_page[0])
+            categories = json.loads(cached_page[1])
+        except (json.JSONDecodeError, TypeError):
+            # Corrupt cache entry — delete and re-fetch below
+            cursor.execute("DELETE FROM pages WHERE name = ?", (page_name,))
+            conn.commit()
+            cached_page = None
+
+    if not cached_page:
+        try:
+            page = get_page(page_name)
+            links = page.links or []
+            categories = page.categories or []
+        except Exception:
+            # Wikipedia API can return empty responses (JSONDecodeError from requests),
+            # or the page may not exist. Return empty links rather than crashing pathfinding.
+            links = []
+            categories = []
         cursor.execute("INSERT OR IGNORE INTO pages (name, links, categories) VALUES (?, ?, ?)",
                        (page_name, json.dumps(links), json.dumps(categories)))
         conn.commit()
@@ -151,8 +183,10 @@ META_CATEGORY_SUBSTRINGS = [
     # Broad maintenance catches
     "articles needing",
     "articles lacking",
+    "articles using",
     "articles with",
     "pages needing",
+    "pages using",
     "pages with",
 
     # Stubs
@@ -209,6 +243,24 @@ _BIRTH_DEATH_RE = re.compile(
 
 META_LINK_SUBSTRINGS = [
     "disambiguation",
+    "articles using",
+    "articles with",
+    "articles needing",
+    "articles lacking",
+    "pages using",
+    "pages needing",
+    "pages with",
+    "infobox templates",
+    "use mdy dates",
+    "use dmy dates",
+    "cs1 maint",
+    "cs1 errors",
+    "webarchive template",
+    "wikiproject",
+    "all stub",
+    "short description",
+    "lists of",
+    "list of lists",
 ]
 
 
@@ -251,7 +303,7 @@ def _find_short_path(start_path: list[str], end_path: list[str], visited: set[st
         visited = set(start_path + end_path)
     if start_time is None:
         start_time = time.time()
-    if time.time() - start_time > 10:
+    if time.time() - start_time > 30:
         return None
 
     start_leaf = start_path[-1]
@@ -270,7 +322,11 @@ def _find_short_path(start_path: list[str], end_path: list[str], visited: set[st
     # Check for a one-hop bridge: start_leaf -> bridge -> end_leaf
     backlinks = get_page_links_with_cache(end_leaf, hard_mode=hard_mode)
     intersection = set(links) & set(backlinks)
+    bridge_attempts = 0
     for bridge in intersection:
+        if bridge_attempts >= 5:
+            break
+        bridge_attempts += 1
         bridge_links = get_page_links_with_cache(bridge, hard_mode=hard_mode)
         if end_leaf in bridge_links:
             return start_path + [bridge] + end_path
@@ -289,7 +345,7 @@ def _find_short_path(start_path: list[str], end_path: list[str], visited: set[st
         return None
     scored_links.sort(key=lambda x: x[1], reverse=True)
 
-    for next_page, _ in scored_links[:3]:
+    for next_page, _ in scored_links[:5]:
         result = _find_short_path(
             start_path + [next_page], end_path,
             visited | {next_page}, start_time, hard_mode=hard_mode,
