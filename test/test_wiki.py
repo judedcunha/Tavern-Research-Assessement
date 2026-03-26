@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
+import wikipedia
 import wiki
 
 # Our hill-climbing algorithm should be able to traverse across both links and categories. Because it is greedy, it should miss the shortcut through the apparently unrelated Warp Pipe pages.
@@ -101,8 +102,13 @@ def mock_wikipedia_library():
         mock_page.categories = page_data["categories"]
         mock_pages[page_name] = mock_page
 
+    def page_side_effect(page_name, **kwargs):
+        if page_name in mock_pages:
+            return mock_pages[page_name]
+        raise wikipedia.exceptions.PageError(page_name)
+
     with patch('wikipedia.page') as mock_page:
-        mock_page.side_effect = lambda page_name, **kwargs: mock_pages[page_name]
+        mock_page.side_effect = page_side_effect
         yield mock_page
 
 def test_get_page(mock_wikipedia_library):
@@ -116,8 +122,8 @@ def test_get_page(mock_wikipedia_library):
 def test_get_page_search(mock_wikipedia_library):
     with patch('wikipedia.search') as mock_search:
         mock_search.return_value = []
-        page = wiki.get_page("Appl")
-        assert page.title == "Python (programming language)"
+        with pytest.raises(Exception):
+            wiki.get_page("Appl")
 
         mock_search.return_value = ["Apple"]
         page = wiki.get_page("Appl")

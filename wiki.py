@@ -18,21 +18,33 @@ def encode_text(text):
     doc = nlp(text)
     return doc.vector.reshape(1, -1)
 
-# TODO: Returns the Python page too often.
 def get_page(page_name):
     """Get a specific Wikipedia page by name"""
+    # Attempt 1: Direct page lookup
     try:
-        return wikipedia.page(page_name, auto_suggest=False, redirect=False)
-    except:
+        return wikipedia.page(page_name, auto_suggest=False, redirect=True)
+    except wikipedia.exceptions.DisambiguationError as e:
+        try:
+            return wikipedia.page(e.options[0], auto_suggest=False, redirect=True)
+        except Exception:
+            pass
+    except wikipedia.exceptions.PageError:
         pass
+
+    # Attempt 2: Search fallback
     try:
         search_results = wikipedia.search(page_name)
-        choice = search_results[0]
-        page = wikipedia.page(choice, auto_suggest=False, redirect=False)
-        return page
-    except:
-        # Return a default page if not found
-        return wikipedia.page("Python (programming language)")
+        if search_results:
+            return wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
+    except wikipedia.exceptions.DisambiguationError as e:
+        try:
+            return wikipedia.page(e.options[0], auto_suggest=False, redirect=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    raise wikipedia.exceptions.PageError(page_name)
 
 def get_page_links_with_cache(page_name):
     conn = sqlite3.connect("pages.db")

@@ -15,25 +15,37 @@ def main():
     with open("dictionary.txt", "r") as f:
         common_words = f.read().splitlines()
 
-    random.seed(42)
-
     while True:
 
-        start_word = random.choice(common_words)
-        start_page = get_page(start_word)
+        start_page = None
+        while start_page is None:
+            start_word = random.choice(common_words)
+            try:
+                start_page = get_page(start_word)
+            except Exception:
+                continue
         print(f"The starting page is: {start_page.title}\n")
         print(f"Summary: {start_page.summary[:500]}...\n")
 
-        
-        computer_word = random.choice(common_words)
-        computer_page = get_page(computer_word)
+        computer_page = None
+        while computer_page is None:
+            computer_word = random.choice(common_words)
+            try:
+                computer_page = get_page(computer_word)
+            except Exception:
+                continue
 
         print(f"The computer's page is: {computer_page.title}\n")
         print(f"Summary: {computer_page.summary[:500]}...\n")
 
-        print("What would you like your page to be page?")
-        user_page_name = input()
-        user_page = get_page(user_page_name)
+        print("What would you like your page to be?")
+        user_page = None
+        while user_page is None:
+            user_page_name = input()
+            try:
+                user_page = get_page(user_page_name)
+            except Exception:
+                print(f"Could not find a Wikipedia page for '{user_page_name}'. Try another:")
         print(f"Your page is: {user_page.title}\n")
         print(f"Summary: {user_page.summary[:500]}...\n")
 
