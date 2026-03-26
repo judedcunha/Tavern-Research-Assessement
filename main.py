@@ -1,7 +1,7 @@
 from wiki import get_page, find_short_path
 import random
 
-def main():
+def main() -> None:
     print("\n\n🥓 Welcome to WikiBacon! 🥓\n")
     print("In this game, we start from a random Wikipedia page, and then we compete to see who can name a page that is *farthest away* from the original page.\n")
     print("Ready to play? Hit Enter to start, or type 'q' to quit")

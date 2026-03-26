@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
+from collections.abc import Generator
 import wikipedia
 import wiki
 
@@ -11,7 +12,7 @@ import wiki
 # Secret shortcut path:
 # Blueberry -> Mushroom Kingdom Warp Pipe -> Bowser's Castle Warp Pipe  -> Bridgerton (4)
 
-TEST_PAGES = {
+TEST_PAGES: dict[str, dict[str, list[str] | str]] = {
     "Blueberry": {
         "links": ["Apple", "Mushroom Kingdom Warp Pipe", "All (disambiguation)"],
         "categories": ["Fruit", "Blue Things"],
@@ -91,9 +92,9 @@ TEST_PAGES = {
 }
 
 @pytest.fixture
-def mock_wikipedia_library():
+def mock_wikipedia_library() -> Generator[MagicMock, None, None]:
     """Fixture to mock both get_page and get_page_links_with_cache"""
-    mock_pages = {}
+    mock_pages: dict[str, MagicMock] = {}
     for page_name, page_data in TEST_PAGES.items():
         mock_page = MagicMock()
         mock_page.title = page_name
@@ -102,7 +103,7 @@ def mock_wikipedia_library():
         mock_page.categories = page_data["categories"]
         mock_pages[page_name] = mock_page
 
-    def page_side_effect(page_name, **kwargs):
+    def page_side_effect(page_name: str, **kwargs: object) -> MagicMock:
         if page_name in mock_pages:
             return mock_pages[page_name]
         raise wikipedia.exceptions.PageError(page_name)
@@ -111,7 +112,7 @@ def mock_wikipedia_library():
         mock_page.side_effect = page_side_effect
         yield mock_page
 
-def test_get_page(mock_wikipedia_library):
+def test_get_page(mock_wikipedia_library: MagicMock) -> None:
     """Test get_page function"""
     page = wiki.get_page("Apple")
     assert page.title == "Apple"
@@ -119,7 +120,7 @@ def test_get_page(mock_wikipedia_library):
     assert page.links == TEST_PAGES["Apple"]["links"]
     assert page.categories == TEST_PAGES["Apple"]["categories"]
 
-def test_get_page_search(mock_wikipedia_library):
+def test_get_page_search(mock_wikipedia_library: MagicMock) -> None:
     with patch('wikipedia.search') as mock_search:
         mock_search.return_value = []
         with pytest.raises(Exception):
@@ -129,14 +130,14 @@ def test_get_page_search(mock_wikipedia_library):
         page = wiki.get_page("Appl")
         assert page.title == "Apple"
 
-def test_link_through_categories(mock_wikipedia_library):
+def test_link_through_categories(mock_wikipedia_library: MagicMock) -> None:
     start_page = wiki.get_page("Blueberry")
     end_page = wiki.get_page("Ocean")
     path = wiki.find_short_path(start_page, end_page)
     # Finds the path through the "Blue Things" category
     assert path == ["Blueberry", "Blue Things", "Ocean"]
 
-def test_hard_mode_no_categories(mock_wikipedia_library):
+def test_hard_mode_no_categories(mock_wikipedia_library: MagicMock) -> None:
     start_page = wiki.get_page("Blueberry")
     end_page = wiki.get_page("Ocean")
     # In hard mode, can't use "Blue Things" category shortcut — path must go through links only
@@ -144,13 +145,13 @@ def test_hard_mode_no_categories(mock_wikipedia_library):
     assert "Blue Things" not in path
     assert len(path) > 3  # longer than the normal mode path through categories
 
-def test_do_not_link_through_meta_pages(mock_wikipedia_library):
+def test_do_not_link_through_meta_pages(mock_wikipedia_library: MagicMock) -> None:
     start_page = wiki.get_page("Apple")
     end_page = wiki.get_page("Orphan (graph theory)")
     with pytest.raises(Exception):
         wiki.find_short_path(start_page, end_page)
 
-def test_meta_category_filtering():
+def test_meta_category_filtering() -> None:
     # Meta categories should be filtered
     assert wiki.is_meta_category("Short description is different from Wikidata")
     assert wiki.is_meta_category("Articles with unsourced statements from March 2024")
@@ -168,7 +169,7 @@ def test_meta_category_filtering():
     assert not wiki.is_meta_category("American rock music groups")
     assert not wiki.is_meta_category("Cities in California")
 
-def test_greedy_search(mock_wikipedia_library):
+def test_greedy_search(mock_wikipedia_library: MagicMock) -> None:
     start_page = wiki.get_page("Blueberry")
     end_page = wiki.get_page("Bridgerton")
     path = wiki.find_short_path(start_page, end_page)

@@ -1,9 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
+from collections.abc import Generator
 from main import main
 
 @pytest.fixture
-def mock_wiki_functions():
+def mock_wiki_functions() -> Generator[dict[str, MagicMock], None, None]:
     """Fixture to mock Wikipedia-related functions"""
     with patch('main.get_page') as mock_get_page, \
          patch('main.find_short_path') as mock_find_path:
@@ -23,13 +24,13 @@ def mock_wiki_functions():
         }
 
 @pytest.fixture
-def mock_input():
+def mock_input() -> Generator[MagicMock, None, None]:
     """Fixture to mock input function"""
     with patch('builtins.input') as mock_input_func:
         yield mock_input_func
 
 
-def test_main_single_round(mock_wiki_functions, mock_input):
+def test_main_single_round(mock_wiki_functions: dict[str, MagicMock], mock_input: MagicMock) -> None:
     """Test main function for a single round"""
     # Set up input: enter, mode selection, page name, quit
     mock_input.side_effect = ['', 'n', 'Ocean', 'q']
@@ -38,7 +39,7 @@ def test_main_single_round(mock_wiki_functions, mock_input):
 
     assert mock_input.call_count == 4
 
-def test_main_multiple_rounds(mock_wiki_functions, mock_input):
+def test_main_multiple_rounds(mock_wiki_functions: dict[str, MagicMock], mock_input: MagicMock) -> None:
     """Test main function with custom input sequence"""
     # Simulate: enter, mode, page+again, page+again, page+quit
     mock_input.side_effect = ['', 'n', 'Mountain', '', 'River', '', 'Plain', 'q']
@@ -47,7 +48,7 @@ def test_main_multiple_rounds(mock_wiki_functions, mock_input):
 
     assert mock_input.call_count == 8
 
-def test_stop_q(mock_wiki_functions, mock_input):
+def test_stop_q(mock_wiki_functions: dict[str, MagicMock], mock_input: MagicMock) -> None:
     """Test that main function handles different input types"""
     # Test with different input types
     test_inputs = ['q']

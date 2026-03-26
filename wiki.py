@@ -1,9 +1,11 @@
 import wikipedia # https://wikipedia.readthedocs.io/en/latest/code.html#api
+from wikipedia import WikipediaPage
 import json
 import sqlite3
 import time
 import re
 from functools import lru_cache
+import numpy as np
 import spacy
 from sklearn.metrics.pairwise import cosine_similarity
 import warnings
@@ -27,14 +29,14 @@ cursor.execute("CREATE INDEX IF NOT EXISTS idx_pages_name ON pages (name)")
 conn.commit()
 
 @lru_cache(maxsize=1024)
-def encode_text(text):
+def encode_text(text: str) -> np.ndarray:
     """Encode text using spacy's sentence vectors"""
     doc = nlp(text)
     return doc.vector.reshape(1, -1)
 
-_page_cache = {}
+_page_cache: dict[str, WikipediaPage] = {}
 
-def get_page(page_name):
+def get_page(page_name: str) -> WikipediaPage:
     """Get a specific Wikipedia page by name"""
     if page_name in _page_cache:
         return _page_cache[page_name]
@@ -44,7 +46,7 @@ def get_page(page_name):
     _page_cache[page.title] = page
     return page
 
-def _fetch_page(page_name):
+def _fetch_page(page_name: str) -> WikipediaPage:
     """Fetch a Wikipedia page from the API (uncached)."""
     # Attempt 1: Direct page lookup
     try:
@@ -73,11 +75,11 @@ def _fetch_page(page_name):
     raise wikipedia.exceptions.PageError(page_name)
 
 
-def clear_page_cache():
+def clear_page_cache() -> None:
     """Clear the in-memory page cache."""
     _page_cache.clear()
 
-def get_page_links_with_cache(page_name, hard_mode=False):
+def get_page_links_with_cache(page_name: str, hard_mode: bool = False) -> list[str]:
     cached_page = cursor.execute("SELECT links, categories FROM pages WHERE name = ?", (page_name,)).fetchone()
 
     if cached_page:
@@ -210,7 +212,7 @@ META_LINK_SUBSTRINGS = [
 ]
 
 
-def is_regular_link(page_name):
+def is_regular_link(page_name: str) -> bool:
     """Filter links by namespace prefix and link-level meta patterns."""
     lower = page_name.lower()
     for prefix in META_PREFIXES:
@@ -222,7 +224,7 @@ def is_regular_link(page_name):
     return True
 
 
-def is_meta_category(category_name):
+def is_meta_category(category_name: str) -> bool:
     """Return True if category is a maintenance/meta category."""
     lower = category_name.lower()
     for substring in META_CATEGORY_SUBSTRINGS:
@@ -235,13 +237,13 @@ def is_meta_category(category_name):
     return False
 
 
-def is_regular_page(page_name):
+def is_regular_page(page_name: str) -> bool:
     """Legacy filter: rejects namespace prefixes and meta categories."""
     if not is_regular_link(page_name):
         return False
     return not is_meta_category(page_name)
 
-def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_mode=False, end_embedding=None):
+def _find_short_path(start_path: list[str], end_path: list[str], visited: set[str] | None = None, start_time: float | None = None, hard_mode: bool = False, end_embedding: np.ndarray | None = None) -> list[str] | None:
     """Find a short path between two Wikipedia pages. Greedy forward hill-climbing
     using cosine similarity of spacy embeddings to score link relevance."""
 
@@ -298,7 +300,7 @@ def _find_short_path(start_path, end_path, visited=None, start_time=None, hard_m
     return None
 
 
-def find_short_path(start_page, end_page, hard_mode=False):
+def find_short_path(start_page: WikipediaPage, end_page: WikipediaPage, hard_mode: bool = False) -> list[str]:
     start_path = [start_page.title]
     end_path = [end_page.title]
     end_embedding = encode_text(end_page.summary)
